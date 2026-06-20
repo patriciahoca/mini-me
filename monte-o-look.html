@@ -2,23 +2,25 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Monte o Look</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       width: 100%; height: 100%;
-      background: transparent;
+      background: #60748c;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      overscroll-behavior: none;
     }
     canvas {
       display: block;
       cursor: grab;
       touch-action: none;
       user-select: none;
+      -webkit-user-select: none;
     }
     canvas:active { cursor: grabbing; }
   </style>
@@ -110,17 +112,26 @@
     canvas.style.height = h + "px";
     canvas.width  = Math.round(w);
     canvas.height = Math.round(h);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     draw();
   }
 
-  canvas.addEventListener("pointerdown", e => {
+  function getEventPos(e) {
+    const r   = canvas.getBoundingClientRect();
+    const sc  = canvas.width / r.width;
+    const src = e.touches ? e.touches[0] : e;
+    return {
+      x: (src.clientX - r.left) * sc,
+      y: (src.clientY - r.top)  * sc,
+      clientX: src.clientX,
+      clientY: src.clientY,
+    };
+  }
+
+  function onStart(e) {
     e.preventDefault();
-    const r  = canvas.getBoundingClientRect();
-    const sx = canvas.width  / r.width;
-    const sy = canvas.height / r.height;
-    const px = (e.clientX - r.left) * sx;
-    const py = (e.clientY - r.top)  * sy;
-    const w  = canvas.width, h = canvas.height;
+    const { x: px, y: py, clientX, clientY } = getEventPos(e);
+    const w = canvas.width, h = canvas.height;
 
     const sorted = imgs
       .map((item, idx) => ({ item, idx }))
@@ -129,28 +140,38 @@
     for (const { item, idx } of sorted) {
       if (getAlpha(item.cache, px - item.x, py - item.y, w, h) > 30) {
         item.z = ++maxZ;
-        drag = { idx, sx: e.clientX, sy: e.clientY, ox: item.x, oy: item.y };
+        drag = { idx, sx: clientX, sy: clientY, ox: item.x, oy: item.y };
         canvas.style.cursor = "grabbing";
         draw();
         break;
       }
     }
-  });
+  }
 
-  window.addEventListener("pointermove", e => {
+  function onMove(e) {
+    e.preventDefault();
     if (!drag) return;
-    const r  = canvas.getBoundingClientRect();
-    const sc = canvas.width / r.width;
+    const r   = canvas.getBoundingClientRect();
+    const sc  = canvas.width / r.width;
+    const src = e.touches ? e.touches[0] : e;
     const item = imgs[drag.idx];
-    item.x = drag.ox + (e.clientX - drag.sx) * sc;
-    item.y = drag.oy + (e.clientY - drag.sy) * sc;
+    item.x = drag.ox + (src.clientX - drag.sx) * sc;
+    item.y = drag.oy + (src.clientY - drag.sy) * sc;
     draw();
-  });
+  }
 
-  window.addEventListener("pointerup", () => {
+  function onEnd() {
     drag = null;
     canvas.style.cursor = "grab";
-  });
+  }
+
+  canvas.addEventListener("pointerdown", onStart);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup",   onEnd);
+
+  canvas.addEventListener("touchstart", onStart, { passive: false });
+  window.addEventListener("touchmove",  onMove,  { passive: false });
+  window.addEventListener("touchend",   onEnd);
 
   window.addEventListener("resize", resize);
 
