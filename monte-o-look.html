@@ -6,6 +6,34 @@
   <title>Monte o Look</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    #mobile-redirect {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #60748c;
+      color: #fff;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      font-family: sans-serif;
+      z-index: 9999;
+    }
+    #mobile-redirect h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    #mobile-redirect p  { font-size: 1rem; opacity: 0.85; line-height: 1.6; }
+    #mobile-redirect a  {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.75rem 1.5rem;
+      background: #fff;
+      color: #60748c;
+      border-radius: 2rem;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
     html, body {
       width: 100%; height: 100%;
       background: #60748c;
@@ -24,8 +52,30 @@
   </style>
 </head>
 <body>
+
+<div id="mobile-redirect">
+  <h1>✨ Monte o Look</h1>
+  <p>Este jogo foi feito para ser jogado no computador.<br>Acesse pelo desktop para a experiência completa!</p>
+  <a href="https://seusite.com">Ir para o site</a>
+</div>
+
 <canvas id="game"></canvas>
+
 <script>
+  // ── Detecção de mobile ──────────────────────────────────────────
+  function isMobile() {
+    return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || window.innerWidth < 768;
+  }
+
+  if (isMobile()) {
+    document.getElementById("mobile-redirect").style.display = "flex";
+    document.getElementById("game").style.display = "none";
+    // Opcional: redirecionar automaticamente após 3s
+    // setTimeout(() => { window.location.href = "https://seusite.com"; }, 3000);
+  }
+
+  // ── Assets ──────────────────────────────────────────────────────
   const FUNDO  = "assets/BG.png";
   const BONECA = "assets/Bonequinha.png";
   const ITEMS  = [
@@ -113,8 +163,10 @@
     draw();
   }
 
+  // ── Controle de drag — FIX: preventDefault só quando necessário ──
+  let pointerInsideCanvas = false;
+
   canvas.addEventListener("pointerdown", e => {
-    e.preventDefault();
     const r  = canvas.getBoundingClientRect();
     const sx = canvas.width  / r.width;
     const sy = canvas.height / r.height;
@@ -126,26 +178,34 @@
       .map((item, idx) => ({ item, idx }))
       .sort((a, b) => b.item.z - a.item.z);
 
+    let hitItem = false;
     for (const { item, idx } of sorted) {
       if (getAlpha(item.cache, px - item.x, py - item.y, w, h) > 30) {
         item.z = ++maxZ;
         drag = { idx, sx: e.clientX, sy: e.clientY, ox: item.x, oy: item.y };
         canvas.style.cursor = "grabbing";
         draw();
+        hitItem = true;
         break;
       }
     }
-  });
+
+    // Só bloqueia scroll se clicou em um item arrastável
+    if (hitItem) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
   window.addEventListener("pointermove", e => {
     if (!drag) return;
+    e.preventDefault(); // Bloqueia scroll apenas durante drag ativo
     const r  = canvas.getBoundingClientRect();
     const sc = canvas.width / r.width;
     const item = imgs[drag.idx];
     item.x = drag.ox + (e.clientX - drag.sx) * sc;
     item.y = drag.oy + (e.clientY - drag.sy) * sc;
     draw();
-  });
+  }, { passive: false });
 
   window.addEventListener("pointerup", () => {
     drag = null;
