@@ -13,7 +13,6 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      overscroll-behavior: none;
     }
     canvas {
       display: block;
@@ -64,32 +63,12 @@
   let drag      = null;
 
   function loadImg(src) {
-    return new Promise(res => {
+    return new Promise((res, rej) => {
       const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => res(img);
+      img.onload  = () => res(img);
+      img.onerror = () => rej(src);
       img.src = src;
     });
-  }
-
-  function buildCache(img) {
-    try {
-      const c = document.createElement("canvas");
-      c.width  = img.naturalWidth;
-      c.height = img.naturalHeight;
-      const cx = c.getContext("2d");
-      cx.drawImage(img, 0, 0);
-      const d = cx.getImageData(0, 0, c.width, c.height);
-      return { data: d.data, w: c.width, h: c.height };
-    } catch { return null; }
-  }
-
-  function getAlpha(cache, lx, ly, cw, ch) {
-    if (!cache) return 255;
-    const ix = Math.round((lx / cw) * cache.w);
-    const iy = Math.round((ly / ch) * cache.h);
-    if (ix < 0 || ix >= cache.w || iy < 0 || iy >= cache.h) return 0;
-    return cache.data[(iy * cache.w + ix) * 4 + 3];
   }
 
   function draw() {
@@ -112,13 +91,12 @@
     canvas.style.height = h + "px";
     canvas.width  = Math.round(w);
     canvas.height = Math.round(h);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     draw();
   }
 
-  function getEventPos(e) {
-    const r   = canvas.getBoundingClientRect();
-    const sc  = canvas.width / r.width;
+  function getPos(e) {
+    const r  = canvas.getBoundingClientRect();
+    const sc = canvas.width / r.width;
     const src = e.touches ? e.touches[0] : e;
     return {
       x: (src.clientX - r.left) * sc,
@@ -128,50 +106,75 @@
     };
   }
 
-  function onStart(e) {
-    e.preventDefault();
-    const { x: px, y: py, clientX, clientY } = getEventPos(e);
+  function findItem(px, py) {
     const w = canvas.width, h = canvas.height;
-
     const sorted = imgs
       .map((item, idx) => ({ item, idx }))
       .sort((a, b) => b.item.z - a.item.z);
-
     for (const { item, idx } of sorted) {
-      if (getAlpha(item.cache, px - item.x, py - item.y, w, h) > 30) {
-        item.z = ++maxZ;
-        drag = { idx, sx: clientX, sy: clientY, ox: item.x, oy: item.y };
-        canvas.style.cursor = "grabbing";
-        draw();
-        break;
+      const lx = px - item.x;
+      const ly = py - item.y;
+      if (lx >= 0 && lx <= w && ly >= 0 && ly <= h) {
+        return { item, idx };
       }
     }
+    return null;
   }
 
-  function onMove(e) {
-    e.preventDefault();
+  // Touch — só bloqueia scroll se tocou num item
+  canvas.addEventListener("touchstart", e => {
+    const { x: px, y: py, clientX, clientY } = getPos(e);
+    const found = findItem(px, py);
+    if (found) {
+      e.preventDefault();
+      const { item, idx } = found;
+      item.z = ++maxZ;
+      drag = { idx, sx: clientX, sy: clientY, ox: item.x, oy: item.y };
+      draw();
+    }
+  }, { passive: false });
+
+  window.addEventListener("touchmove", e => {
     if (!drag) return;
+    e.preventDefault();
     const r   = canvas.getBoundingClientRect();
     const sc  = canvas.width / r.width;
-    const src = e.touches ? e.touches[0] : e;
+    const src = e.touches[0];
     const item = imgs[drag.idx];
     item.x = drag.ox + (src.clientX - drag.sx) * sc;
     item.y = drag.oy + (src.clientY - drag.sy) * sc;
     draw();
-  }
+  }, { passive: false });
 
-  function onEnd() {
+  window.addEventListener("touchend", () => { drag = null; });
+
+  // Mouse (desktop)
+  canvas.addEventListener("pointerdown", e => {
+    if (e.pointerType === "touch") return;
+    const { x: px, y: py, clientX, clientY } = getPos(e);
+    const found = findItem(px, py);
+    if (found) {
+      const { item, idx } = found;
+      item.z = ++maxZ;
+      drag = { idx, sx: clientX, sy: clientY, ox: item.x, oy: item.y };
+      draw();
+    }
+  });
+
+  window.addEventListener("pointermove", e => {
+    if (e.pointerType === "touch" || !drag) return;
+    const r  = canvas.getBoundingClientRect();
+    const sc = canvas.width / r.width;
+    const item = imgs[drag.idx];
+    item.x = drag.ox + (e.clientX - drag.sx) * sc;
+    item.y = drag.oy + (e.clientY - drag.sy) * sc;
+    draw();
+  });
+
+  window.addEventListener("pointerup", e => {
+    if (e.pointerType === "touch") return;
     drag = null;
-    canvas.style.cursor = "grab";
-  }
-
-  canvas.addEventListener("pointerdown", onStart);
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup",   onEnd);
-
-  canvas.addEventListener("touchstart", onStart, { passive: false });
-  window.addEventListener("touchmove",  onMove,  { passive: false });
-  window.addEventListener("touchend",   onEnd);
+  });
 
   window.addEventListener("resize", resize);
 
@@ -180,13 +183,13 @@
     loadImg(BONECA).then(img => { bonecaImg = img; }),
     ...ITEMS.map((src, i) =>
       loadImg(src).then(img => {
-        imgs[i] = { img, cache: buildCache(img), x: 0, y: 0, z: i };
+        imgs[i] = { img, x: 0, y: 0, z: i };
       })
     ),
   ]).then(() => {
     maxZ = ITEMS.length;
     resize();
-  });
+  }).catch(err => console.error("Erro:", err));
 </script>
 </body>
 </html>
