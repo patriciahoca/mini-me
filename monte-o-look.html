@@ -1,179 +1,160 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Monte o Look</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: 100%; height: 100%;
-      background: #60748c;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-    canvas {
-      display: block;
-      cursor: grab;
-      touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    canvas:active { cursor: grabbing; }
-  </style>
-</head>
-<body>
-<canvas id="game"></canvas>
-<script>
-  const FUNDO  = "assets/BG.png";
-  const BONECA = "assets/Bonequinha.png";
-  const ITEMS  = [
-    "assets/roupa2.png",
-    "assets/roupa.png",
-    "assets/roupa%20leia.png",
-    "assets/saia.png",
-    "assets/allstar.png",
-    "assets/sapato.png",
-    "assets/cabelo.png",
-    "assets/cabelo%20leia.png",
-    "assets/oculos%20verdes.png",
-    "assets/oculos%20oncinha.png",
-    "assets/tv.png",
-    "assets/livro.png",
-    "assets/bola.png",
-    "assets/bola%20tenis.png",
-    "assets/bolsa.png",
-    "assets/cafe.png",
-    "assets/cha.png",
-    "assets/cervejinha.png",
-    "assets/natacao.png",
-    "assets/partitura.png",
-    "assets/quadro.png",
-  ];
+const FUNDO  = "https://patriciahoca.github.io/mini-me/assets/BG.png";
+const BONECA = "https://patriciahoca.github.io/mini-me/assets/Bonequinha.png";
+const ITEMS  = [
+  "https://patriciahoca.github.io/mini-me/assets/roupa2.png",
+  "https://patriciahoca.github.io/mini-me/assets/roupa.png",
+  "https://patriciahoca.github.io/mini-me/assets/roupa%20leia.png",
+  "https://patriciahoca.github.io/mini-me/assets/saia.png",
+  "https://patriciahoca.github.io/mini-me/assets/allstar.png",
+  "https://patriciahoca.github.io/mini-me/assets/sapato.png",
+  "https://patriciahoca.github.io/mini-me/assets/cabelo.png",
+  "https://patriciahoca.github.io/mini-me/assets/cabelo%20leia.png",
+  "https://patriciahoca.github.io/mini-me/assets/oculos%20verdes.png",
+  "https://patriciahoca.github.io/mini-me/assets/oculos%20oncinha.png",
+  "https://patriciahoca.github.io/mini-me/assets/tv.png",
+  "https://patriciahoca.github.io/mini-me/assets/livro.png",
+  "https://patriciahoca.github.io/mini-me/assets/bola.png",
+  "https://patriciahoca.github.io/mini-me/assets/bola%20tenis.png",
+  "https://patriciahoca.github.io/mini-me/assets/bolsa.png",
+  "https://patriciahoca.github.io/mini-me/assets/cafe.png",
+  "https://patriciahoca.github.io/mini-me/assets/cha.png",
+  "https://patriciahoca.github.io/mini-me/assets/cervejinha.png",
+  "https://patriciahoca.github.io/mini-me/assets/natacao.png",
+  "https://patriciahoca.github.io/mini-me/assets/partitura.png",
+  "https://patriciahoca.github.io/mini-me/assets/quadro.png",
+];
 
-  const canvas = document.getElementById("game");
-  const ctx    = canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx    = canvas.getContext("2d");
 
-  let fundoImg  = null;
-  let bonecaImg = null;
-  const imgs    = [];
-  let maxZ      = 0;
-  let drag      = null;
+let fundoImg  = null;
+let bonecaImg = null;
+const imgs    = [];
+let maxZ      = 0;
+let drag      = null;
 
-  function loadImg(src) {
-    return new Promise((res, rej) => {
-      const img = new Image();
-      img.onload  = () => res(img);
-      img.onerror = () => rej(src);
-      img.src = src;
-    });
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = () => rej(src);
+    img.src = src;
+  });
+}
+
+function buildCache(img) {
+  try {
+    const c = document.createElement("canvas");
+    c.width  = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    const d = cx.getImageData(0, 0, c.width, c.height);
+    return { data: d.data, w: c.width, h: c.height };
+  } catch { return null; }
+}
+
+function getAlpha(cache, lx, ly, cw, ch) {
+  if (!cache) return -1;
+  const ix = Math.round((lx / cw) * cache.w);
+  const iy = Math.round((ly / ch) * cache.h);
+  if (ix < 0 || ix >= cache.w || iy < 0 || iy >= cache.h) return 0;
+  return cache.data[(iy * cache.w + ix) * 4 + 3];
+}
+
+function draw() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  if (fundoImg)  ctx.drawImage(fundoImg,  0, 0, w, h);
+  if (bonecaImg) ctx.drawImage(bonecaImg, 0, 0, w, h);
+  [...imgs]
+    .sort((a, b) => a.z - b.z)
+    .forEach(item => ctx.drawImage(item.img, item.x, item.y, w, h));
+}
+
+function resize() {
+  if (!fundoImg) return;
+  const aspect = fundoImg.naturalWidth / fundoImg.naturalHeight;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w  = Math.min(vw, vh * aspect);
+  const h  = w / aspect;
+  canvas.style.width  = w + "px";
+  canvas.style.height = h + "px";
+  canvas.width  = Math.round(w);
+  canvas.height = Math.round(h);
+  draw();
+}
+
+function getPos(e) {
+  const r  = canvas.getBoundingClientRect();
+  const sc = canvas.width / r.width;
+  const src = e.touches ? e.touches[0] : e;
+  return {
+    x: (src.clientX - r.left) * sc,
+    y: (src.clientY - r.top)  * sc,
+    clientX: src.clientX,
+    clientY: src.clientY,
+  };
+}
+
+function findItem(px, py) {
+  const w = canvas.width, h = canvas.height;
+  const sorted = imgs
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => b.item.z - a.item.z);
+  for (const { item, idx } of sorted) {
+    const lx = px - item.x;
+    const ly = py - item.y;
+    if (lx < 0 || lx > w || ly < 0 || ly > h) continue;
+    const alpha = getAlpha(item.cache, lx, ly, w, h);
+    if (alpha > 30 || alpha === -1) return { item, idx };
   }
+  return null;
+}
 
-  function buildCache(img) {
-    try {
-      const c = document.createElement("canvas");
-      c.width  = img.naturalWidth;
-      c.height = img.naturalHeight;
-      const cx = c.getContext("2d");
-      cx.drawImage(img, 0, 0);
-      const d = cx.getImageData(0, 0, c.width, c.height);
-      return { data: d.data, w: c.width, h: c.height };
-    } catch { return null; }
-  }
-
-  function getAlpha(cache, lx, ly, cw, ch) {
-    if (!cache) return -1;
-    const ix = Math.round((lx / cw) * cache.w);
-    const iy = Math.round((ly / ch) * cache.h);
-    if (ix < 0 || ix >= cache.w || iy < 0 || iy >= cache.h) return 0;
-    return cache.data[(iy * cache.w + ix) * 4 + 3];
-  }
-
-  function draw() {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    if (fundoImg)  ctx.drawImage(fundoImg,  0, 0, w, h);
-    if (bonecaImg) ctx.drawImage(bonecaImg, 0, 0, w, h);
-    [...imgs]
-      .sort((a, b) => a.z - b.z)
-      .forEach(item => ctx.drawImage(item.img, item.x, item.y, w, h));
-  }
-
-  function resize() {
-    if (!fundoImg) return;
-    const aspect = fundoImg.naturalWidth / fundoImg.naturalHeight;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const w  = Math.min(vw, vh * aspect);
-    const h  = w / aspect;
-    canvas.style.width  = w + "px";
-    canvas.style.height = h + "px";
-    canvas.width  = Math.round(w);
-    canvas.height = Math.round(h);
-    draw();
-  }
-
-  function getPos(e) {
-    const r  = canvas.getBoundingClientRect();
-    const sc = canvas.width / r.width;
-    const src = e.touches ? e.touches[0] : e;
-    return {
-      x: (src.clientX - r.left) * sc,
-      y: (src.clientY - r.top)  * sc,
-      clientX: src.clientX,
-      clientY: src.clientY,
-    };
-  }
-
-  function findItem(px, py) {
-    const w = canvas.width, h = canvas.height;
-    const sorted = imgs
-      .map((item, idx) => ({ item, idx }))
-      .sort((a, b) => b.item.z - a.item.z);
-    for (const { item, idx } of sorted) {
-      const lx = px - item.x;
-      const ly = py - item.y;
-      if (lx < 0 || lx > w || ly < 0 || ly > h) continue;
-      const alpha = getAlpha(item.cache, lx, ly, w, h);
-      if (alpha > 30 || alpha === -1) return { item, idx };
-    }
-    return null;
-  }
-
-  function onStart(e, isTouch) {
-    const { x: px, y: py, clientX, clientY } = getPos(e);
-    const found = findItem(px, py);
-    if (found) {
-      if (isTouch) e.preventDefault();
-      const { item, idx } = found;
-      item.z = ++maxZ;
-      drag = { idx, sx: clientX, sy: clientY, ox: item.x, oy: item.y };
-      draw();
-    }
-  }
-
-  function onMove(e, isTouch) {
-    if (!drag) return;
+function onStart(e, isTouch) {
+  const { x: px, y: py, clientX, clientY } = getPos(e);
+  const found = findItem(px, py);
+  if (found) {
     if (isTouch) e.preventDefault();
-    const r   = canvas.getBoundingClientRect();
-    const sc  = canvas.width / r.width;
-    const src = e.touches ? e.touches[0] : e;
-    const item = imgs[drag.idx];
-    item.x = drag.ox + (src.clientX - drag.sx) * sc;
-    item.y = drag.oy + (src.clientY - drag.sy) * sc;
+    const { item, idx } = found;
+    item.z = ++maxZ;
+    drag = { idx, sx: clientX, sy: clientY, ox: item.x, oy: item.y };
     draw();
   }
+}
 
-  canvas.addEventListener("touchstart", e => onStart(e, true), { passive: false });
-  window.addEventListener("touchmove",  e => onMove(e, true),  { passive: false });
-  window.addEventListener("touchend",   () => { drag = null; });
+function onMove(e, isTouch) {
+  if (!drag) return;
+  if (isTouch) e.preventDefault();
+  const r   = canvas.getBoundingClientRect();
+  const sc  = canvas.width / r.width;
+  const src = e.touches ? e.touches[0] : e;
+  const item = imgs[drag.idx];
+  item.x = drag.ox + (src.clientX - drag.sx) * sc;
+  item.y = drag.oy + (src.clientY - drag.sy) * sc;
+  draw();
+}
 
-  canvas.addEventListener("pointerdown", e => { if (e.pointerType !== "touch") onStart(e, false); });
-  window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") onMove(e, false); });
-  window.addEventListener("pointerup",   e => { if (e.pointerType !== "touch") drag = null; });
+canvas.addEventListener("touchstart", e => onStart(e, true), { passive: false });
+window.addEventListener("touchmove",  e => onMove(e, true),  { passive: false });
+window.addEventListener("touchend",   () => { drag = null; });
 
-  window.addEventListener("resize", resize);
+canvas.addEventListener("pointerdown", e => { if (e.pointerType !== "touch") onStart(e, false); });
+window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") onMove(e, false); });
+window.addEventListener("pointerup",   e => { if (e.pointerType !== "touch") drag = null; });
 
-  Promise.all([
-    loadImg(FUNDO).then(img  => { fundoI
+window.addEventListener("resize", resize);
+
+Promise.all([
+  loadImg(FUNDO).then(img  => { fundoImg  = img; }),
+  loadImg(BONECA).then(img => { bonecaImg = img; }),
+  ...ITEMS.map((src, i) =>
+    loadImg(src).then(img => {
+      imgs[i] = { img, cache: buildCache(img), x: 0, y: 0, z: i };
+    })
+  ),
+]).then(() => {
+  maxZ = ITEMS.length;
+  resize();
+}).catch(err => console.error("Erro:", err));
